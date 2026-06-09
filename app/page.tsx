@@ -1,65 +1,161 @@
-import Image from "next/image";
+import { prisma } from '@/lib/prisma'
+import { STATUS_LIST, calcDday } from '@/lib/constants'
+import Link from 'next/link'
 
-export default function Home() {
+export default async function DashboardPage() {
+  const jobs = await prisma.job.findMany({ orderBy: { createdAt: 'desc' } })
+
+  const total = jobs.length
+  const appliedCount = jobs.filter(j =>
+    ['APPLIED', 'DOCUMENT_PASSED', 'INTERVIEW', 'FINAL_PASSED'].includes(j.status)
+  ).length
+  const interviewCount = jobs.filter(j => j.status === 'INTERVIEW').length
+  const passedCount = jobs.filter(j => j.status === 'FINAL_PASSED').length
+
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const sevenDaysLater = new Date(today)
+  sevenDaysLater.setDate(sevenDaysLater.getDate() + 7)
+
+  const upcoming = jobs
+    .filter(j => {
+      if (!j.deadline || j.status === 'REJECTED') return false
+      const d = new Date(j.deadline)
+      d.setHours(0, 0, 0, 0)
+      return d >= today && d <= sevenDaysLater
+    })
+    .sort((a, b) => new Date(a.deadline!).getTime() - new Date(b.deadline!).getTime())
+
+  const recent = jobs.slice(0, 5)
+
+  const stats = [
+    { label: '전체 공고', value: total },
+    { label: '지원 완료', value: appliedCount },
+    { label: '면접 진행', value: interviewCount },
+    { label: '최종 합격', value: passedCount },
+  ]
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+    <div className="space-y-8">
+      <div>
+        <h1 className="text-xl font-semibold text-[#2D2D2D]">대시보드</h1>
+        <p className="mt-1 text-sm text-[#2D2D2D]/40">취업 현황을 한눈에 확인하세요</p>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {stats.map(s => (
+          <div
+            key={s.label}
+            className="bg-white rounded-xl p-5"
+            style={{ border: '1px solid #E8E4DE' }}
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+            <p className="text-sm text-[#2D2D2D]/45">{s.label}</p>
+            <p className="text-3xl font-bold mt-1 text-[#2E4A7A]">{s.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* D-7 임박 마감 */}
+        <div className="bg-white rounded-xl p-5" style={{ border: '1px solid #E8E4DE' }}>
+          <h2 className="font-semibold text-[#2D2D2D] mb-4">D-7 마감 임박</h2>
+          {upcoming.length === 0 ? (
+            <p className="text-sm py-6 text-center text-[#2D2D2D]/35">임박한 마감 공고가 없어요</p>
+          ) : (
+            <div>
+              {upcoming.map((job, i) => {
+                const dday = calcDday(job.deadline)
+                const statusLabel = STATUS_LIST.find(s => s.value === job.status)?.label ?? job.status
+                return (
+                  <div
+                    key={job.id}
+                    className="flex items-center justify-between py-3"
+                    style={i < upcoming.length - 1 ? { borderBottom: '1px solid #E8E4DE' } : undefined}
+                  >
+                    <div>
+                      <p className="font-medium text-[#2D2D2D] text-sm">{job.company}</p>
+                      <p className="text-xs mt-0.5 text-[#2D2D2D]/45">{job.position}</p>
+                    </div>
+                    <div className="flex items-center gap-2.5">
+                      <span
+                        className="text-xs px-2 py-0.5 rounded-full font-medium"
+                        style={{ background: '#FAF7F2', color: '#2E4A7A', border: '1px solid #E8E4DE' }}
+                      >
+                        {statusLabel}
+                      </span>
+                      <span className={`text-sm font-bold tabular-nums ${dday === 'D-day' ? 'text-red-500' : 'text-orange-400'}`}>
+                        {dday}
+                      </span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
-      </main>
+
+        {/* 최근 추가 공고 */}
+        <div className="bg-white rounded-xl p-5" style={{ border: '1px solid #E8E4DE' }}>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold text-[#2D2D2D]">최근 추가 공고</h2>
+            <Link href="/jobs" className="text-sm text-[#2E4A7A] hover:underline">
+              전체보기 →
+            </Link>
+          </div>
+          {recent.length === 0 ? (
+            <p className="text-sm py-6 text-center text-[#2D2D2D]/35">
+              아직 공고가 없어요.{' '}
+              <Link href="/jobs" className="text-[#2E4A7A] hover:underline">추가해보세요</Link>
+            </p>
+          ) : (
+            <div>
+              {recent.map((job, i) => {
+                const statusLabel = STATUS_LIST.find(s => s.value === job.status)?.label ?? job.status
+                return (
+                  <div
+                    key={job.id}
+                    className="flex items-center justify-between py-3"
+                    style={i < recent.length - 1 ? { borderBottom: '1px solid #E8E4DE' } : undefined}
+                  >
+                    <div>
+                      <p className="font-medium text-[#2D2D2D] text-sm">{job.company}</p>
+                      <p className="text-xs mt-0.5 text-[#2D2D2D]/45">{job.position}</p>
+                    </div>
+                    <span
+                      className="text-xs px-2 py-0.5 rounded-full font-medium"
+                      style={{ background: '#FAF7F2', color: '#2E4A7A', border: '1px solid #E8E4DE' }}
+                    >
+                      {statusLabel}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* 상태별 현황 */}
+      <div className="bg-white rounded-xl p-5" style={{ border: '1px solid #E8E4DE' }}>
+        <h2 className="font-semibold text-[#2D2D2D] mb-4">상태별 현황</h2>
+        <div className="grid grid-cols-4 lg:grid-cols-7 gap-3">
+          {STATUS_LIST.map(s => {
+            const count = jobs.filter(j => j.status === s.value).length
+            return (
+              <Link
+                key={s.value}
+                href="/jobs"
+                className="text-center rounded-xl py-4 px-2 bg-white transition-colors hover:bg-[#FAF7F2]"
+                style={{ border: '1px solid #E8E4DE' }}
+              >
+                <p className="text-2xl font-bold text-[#2E4A7A]">{count}</p>
+                <p className="text-xs mt-1 leading-tight text-[#2D2D2D]/45">{s.label}</p>
+              </Link>
+            )
+          })}
+        </div>
+      </div>
     </div>
-  );
+  )
 }
