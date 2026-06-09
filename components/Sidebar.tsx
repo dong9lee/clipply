@@ -12,9 +12,9 @@ export default function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="w-56 min-h-screen flex flex-col px-4 py-6 bg-white border-r border-[#E8E4DE]">
+    <aside className="w-56 min-h-screen flex flex-col px-4 pt-8 pb-6 bg-white border-r border-[#E8E4DE]">
       <div className="mb-8 px-2">
-        <span className="text-2xl font-bold tracking-tight text-[#2E4A7A]">Clipply</span>
+        <span className="text-3xl font-bold tracking-tight text-[#2E4A7A]">Clipply</span>
       </div>
       <nav className="flex flex-col gap-1">
         {navItems.map((item) => {
